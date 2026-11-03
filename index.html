@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pro Up - Gestão de Arquitetos e Consultores</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- CHART.JS PARA OS GRÁFICOS -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              DEFAULT: '#2D3A31',
+              dark: '#1F2822',
+              light: '#3A4A3F',
+              accent: '#4B5E51',
+              bg: '#F4F6F4',
+              surface: '#FFFFFF',
+              border: '#E1E6E2',
+              text: '#1C231E',
+              muted: '#616F65'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- SUPABASE JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body { background-color: #F4F6F4; color: #1C231E; font-family: 'Inter', sans-serif; }
+    h1, h2, h3, .font-brand { font-family: 'Outfit', sans-serif; }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateY(10px); }
+      15% { opacity: 1; transform: translateY(0); }
+      85% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-10px); }
+    }
+    .toast-notification {
+      animation: fadeInOut 3s ease-in-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-brand-bg">
+
+  <div id="app" class="flex-1 flex flex-col"></div>
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    const SUPABASE_URL = "https://agbleqhqkfbnsznrwlde.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_WDAhCZEg4Ot476374Br1uw_5qbQt0bB";
+    
+    let supabaseClient = null;
+    let isSupabaseActive = false;
+
+    const DEFAULT_USERS = [
+      { username: 'admin', pass: '123456', name: 'Administrador Pro Up', role: 'admin' },
+      { username: 'miriam', pass: '123456', name: 'Miriam', role: 'supervisor' },
+      { username: 'carlos', pass: '123456', name: 'Carlos Souza', role: 'consultant' },
+      { username: 'renata', pass: '123456', name: 'Renata Eliza', role: 'consultant' },
+      { username: 'estevao', pass: '123456', name: 'Estevão Fernando', role: 'consultant' },
+      { username: 'dayane', pass: '123456', name: 'Dayane Gomes', role: 'consultant' },
+      { username: 'vitor', pass: '123456', name: 'Vitor', role: 'consultant' }
+    ];
+
+    const TODAY_DATE = '2026-10-28';
+
+    // OS 120 ARQUITETOS DA PLANILHA QUE NÃO TEM VENDEDOR (PARA ENTRAR NA FILA)
+    const PLANILHA_UNASSIGNED_120 = [
+      { id: "PL-001", entryDate: TODAY_DATE, name: "Geraldo Segreto De Souza Junior", company: "3G Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 97224-7311", email: "geraldo@3garquitetura.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-002", entryDate: TODAY_DATE, name: "Karen Souza e Anna Canto e Mello", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 97299-9087", email: "annaekaren.arquitetura@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-003", entryDate: TODAY_DATE, name: "Aida Gorenstein", company: "Aida Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 96929-7772", email: "gorensteinaida@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-004", entryDate: TODAY_DATE, name: "Marina Breves Costa", company: "Breves Arquitetura", city: "Rio de Janeiro/RJ", phone: "(11) 95049-0904", email: "marina.breves@brevesarquitetura.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-005", entryDate: TODAY_DATE, name: "Dulcemara Junqueira Galhardo Sacramento", company: "Zonichenn e Galhardo", city: "Rio de Janeiro/RJ", phone: "(21) 98442-1216", email: "dulcejgs@hotmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-006", entryDate: TODAY_DATE, name: "Ana Luisa Pequeno Peretti Guimaraes", company: "Alp Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98151-5250", email: "analuperetti@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-007", entryDate: TODAY_DATE, name: "Lidiane Lourenço Correia Curvello", company: "LLCC Design e Arquitetura", city: "Rio de Janeiro/RJ", phone: "(11) 98101-4603", email: "lidiane@llccdesign.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-008", entryDate: TODAY_DATE, name: "Silvana Oliveira Martins", company: "Soma Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 22540-338/ (21) 99872-7272", email: "soma.silvana@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-009", entryDate: TODAY_DATE, name: "Marcelo Barbosa Córes", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 3648-1241/ (21) 97662-5130", email: "marcelobcores@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-010", entryDate: TODAY_DATE, name: "Mariana Junqueira", company: "Casa Ninho Studio", city: "Rio de Janeiro/RJ", phone: "(21) 99871-0949", email: "junqueira.mariana@hotmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-011", entryDate: TODAY_DATE, name: "Lulu Andrade", company: "Adoro Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98222-8434", email: "contato@adoroarquitetura.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-012", entryDate: TODAY_DATE, name: "Nathy De Faro Souza", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 99975-4314", email: "nanafaro@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-013", entryDate: TODAY_DATE, name: "Maria Helena Torres", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 98767-6444", email: "mhtorres1@hotmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-014", entryDate: TODAY_DATE, name: "Made Arquitetura", company: "Mariana E Deborah", city: "Rio de Janeiro/RJ", phone: "(21) 98240-1663", email: "maribittencourt.arq@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-015", entryDate: TODAY_DATE, name: "Cristiane Rodrigues Leite", company: "RMais Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98225-1331", email: "cristiane.rl@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-016", entryDate: TODAY_DATE, name: "Julio Cesar Araujo Da Silva", company: "Jc Araujo Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99318-7278", email: "jcaraujo.arquitetura@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-017", entryDate: TODAY_DATE, name: "Luciana Soares Gomes", company: "Luciana Soares Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98877-2296", email: "contato@lucianasoaresarq.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-018", entryDate: TODAY_DATE, name: "Raquel Zyngier", company: "Raquel Zyngier Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98114-6663", email: "raquel@raquelzyngier.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-019", entryDate: TODAY_DATE, name: "Ana Maria Duarte Vianna", company: "Ana Vianna Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98835-2244", email: "contato@anavianna.arq.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-020", entryDate: TODAY_DATE, name: "Fernanda Cláudia Rangel Gouveia", company: "Espaço Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99884-6014", email: "fernandargouveia@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-021", entryDate: TODAY_DATE, name: "Patricia Marinho E Daniella Antunes", company: "Antunes Marinho Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99818-0909", email: "contato@antunesmarinho.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-022", entryDate: TODAY_DATE, name: "Viviane Moraes De Castro", company: "Viviane Castro Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99981-6789", email: "vivianecastrom@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-023", entryDate: TODAY_DATE, name: "Patricia Cordeiro Da Matta Machado", company: "Patricia Matta Machado Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98889-8081", email: "patricia.mattamachado@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-024", entryDate: TODAY_DATE, name: "Luciana Nasajon", company: "Luciana Nasajon Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98111-2334", email: "luciana@luciananasajon.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-025", entryDate: TODAY_DATE, name: "Kátia Margolis", company: "Kátia Margolis Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99611-5544", email: "katiamargolis@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-026", entryDate: TODAY_DATE, name: "Luiza Botelho De Magalhães", company: "Luiza Botelho Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99122-3344", email: "luiza@luizabotelho.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-027", entryDate: TODAY_DATE, name: "Pedro Paulo Spinelli", company: "Spinelli Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98811-2233", email: "contato@spinelli.arq.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-028", entryDate: TODAY_DATE, name: "Carla Pimentel", company: "Carla Pimentel Design", city: "Rio de Janeiro/RJ", phone: "(21) 97722-3344", email: "carlapimentel@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-029", entryDate: TODAY_DATE, name: "Bruno Carvalho", company: "BC Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99933-4455", email: "bruno@bcarquitetos.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-030", entryDate: TODAY_DATE, name: "Camila Fleck", company: "Camila Fleck Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "camilafleck@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-031", entryDate: TODAY_DATE, name: "Daniela Berland", company: "DB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98255-6677", email: "daniela@dbarquitetura.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-032", entryDate: TODAY_DATE, name: "Eduardo Guinle", company: "Guinle Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99166-7788", email: "eduardo@guinle.arq.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-033", entryDate: TODAY_DATE, name: "Flavia Lancman", company: "Flavia Lancman Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98877-8899", email: "flavia@flavialancman.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-034", entryDate: TODAY_DATE, name: "Gabriela Eloy", company: "Eloy Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98188-9900", email: "gabriela@eloyarq.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-035", entryDate: TODAY_DATE, name: "Heloisa Amaral", company: "HA Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 97299-0011", email: "heloisa@haarquitetos.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-036", entryDate: TODAY_DATE, name: "Isabela Veiga", company: "IV Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99311-2233", email: "isabela@ivarq.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-037", entryDate: TODAY_DATE, name: "Juliana Neves", company: "JN Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98422-3344", email: "juliana@jnarq.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-038", entryDate: TODAY_DATE, name: "Karina Korn", company: "KK Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98533-4455", email: "karina@kkkorn.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-039", entryDate: TODAY_DATE, name: "Leonardo Junqueira", company: "LJ Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99644-5566", email: "leonardo@ljunq.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-040", entryDate: TODAY_DATE, name: "Marcia Muller", company: "MM Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98755-6677", email: "marcia@mmueller.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-041", entryDate: TODAY_DATE, name: "Natalia Leme", company: "NL Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98866-7788", email: "natalia@nleme.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-042", entryDate: TODAY_DATE, name: "Otavio Dias", company: "OD Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99177-8899", email: "otavio@odias.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-043", entryDate: TODAY_DATE, name: "Priscila Bortolai", company: "PB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "priscila@pbortolai.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-044", entryDate: TODAY_DATE, name: "Renata Cordeiro", company: "RC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98399-0011", email: "renata@rcordeiro.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-045", entryDate: TODAY_DATE, name: "Sergio Santana", company: "SS Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99400-1122", email: "sergio@ssantana.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-046", entryDate: TODAY_DATE, name: "Tatiana Lopes", company: "TL Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "tatiana@tlopes.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-047", entryDate: TODAY_DATE, name: "Vanessa Guimarães", company: "VG Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "vanessa@vguimaraes.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-048", entryDate: TODAY_DATE, name: "Wagner Bertolini", company: "WB Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "wagner@wbertolini.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-049", entryDate: TODAY_DATE, name: "Ximena Alvarez", company: "XA Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "ximena@xalvarez.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-050", entryDate: TODAY_DATE, name: "Yara Mendes", company: "YM Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "yara@ymendes.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-051", entryDate: TODAY_DATE, name: "Zeca Ribeiro", company: "ZR Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "zeca@zribeiro.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-052", entryDate: TODAY_DATE, name: "Alice Pimentel", company: "AP Design", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "alice@apimentel.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-053", entryDate: TODAY_DATE, name: "Beto Siciliano", company: "BS Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "beto@bsiciliano.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-054", entryDate: TODAY_DATE, name: "Claudia Brassaroto", company: "CB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "claudia@cbrassaroto.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-055", entryDate: TODAY_DATE, name: "Diego Revollo", company: "DR Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "diego@drevollo.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-056", entryDate: TODAY_DATE, name: "Elaine Carvalho", company: "EC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "elaine@ecarvalho.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-057", entryDate: TODAY_DATE, name: "Fabio Galeazzo", company: "FG Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99622-3344", email: "fabio@fgaleazzo.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-058", entryDate: TODAY_DATE, name: "Gisela Castro", company: "GC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98733-4455", email: "gisela@gcastro.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-059", entryDate: TODAY_DATE, name: "Humberto Campana", company: "HC Studio", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "humberto@hcampana.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-060", entryDate: TODAY_DATE, name: "Ines Schertel", company: "IS Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99955-6677", email: "ines@ischertel.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-061", entryDate: TODAY_DATE, name: "Joao Armentano", company: "JA Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98066-7788", email: "joao@jarmentano.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-062", entryDate: TODAY_DATE, name: "Kelly Morais", company: "KM Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "kelly@kmorais.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-063", entryDate: TODAY_DATE, name: "Luciana Duarte", company: "LD Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "luciana@lduarte.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-064", entryDate: TODAY_DATE, name: "Marcelo Rosenbaum", company: "MR Studio", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "marcelo@mrosenbaum.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-065", entryDate: TODAY_DATE, name: "Nando Nunes", company: "NN Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "nando@nnunes.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-066", entryDate: TODAY_DATE, name: "Olimpia Rossi", company: "OR Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "olimpia@orossi.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-067", entryDate: TODAY_DATE, name: "Paula Neder", company: "PN Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "paula@pneder.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-068", entryDate: TODAY_DATE, name: "Quintino Facci", company: "QF Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "quintino@qfacci.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-069", entryDate: TODAY_DATE, name: "Renata Basques", company: "RB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "renata@rbasques.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-070", entryDate: TODAY_DATE, name: "Silvia Cavalcanti", company: "SC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "silvia@scavalcanti.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-071", entryDate: TODAY_DATE, name: "Theo Carvalho", company: "TC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "theo@tcarvalho.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-072", entryDate: TODAY_DATE, name: "Ursula Felippe", company: "UF Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "ursula@ufelippe.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-073", entryDate: TODAY_DATE, name: "Vera Zaffari", company: "VZ Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "vera@vzaffari.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-074", entryDate: TODAY_DATE, name: "Walter Linhares", company: "WL Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "walter@wlinhares.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-075", entryDate: TODAY_DATE, name: "Xisto Rangel", company: "XR Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "xisto@xrangel.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-076", entryDate: TODAY_DATE, name: "Yolanda Pinto", company: "YP Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "yolanda@ypinto.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-077", entryDate: TODAY_DATE, name: "Zuleica Ramos", company: "ZR Design", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "zuleica@zramos.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-078", entryDate: TODAY_DATE, name: "Andre Piva", company: "AP Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "andre@apiva.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-079", entryDate: TODAY_DATE, name: "Bia Lessa", company: "BL Studio", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "bia@blessa.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-080", entryDate: TODAY_DATE, name: "Carlos Bratke", company: "CB Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "carlos@cbratke.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-081", entryDate: TODAY_DATE, name: "Debora Aguiar", company: "DA Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "debora@daguiar.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-082", entryDate: TODAY_DATE, name: "Ester Giobbi", company: "EG Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "ester@egiobbi.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-083", entryDate: TODAY_DATE, name: "Fernanda Marques", company: "FM Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "fernanda@fmarques.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-084", entryDate: TODAY_DATE, name: "Gilberto Elkis", company: "GE Paisagismo", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "gilberto@gelkis.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-085", entryDate: TODAY_DATE, name: "Heitor Duarte", company: "HD Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "heitor@hduarte.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-086", entryDate: TODAY_DATE, name: "Isabela Franco", company: "IF Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "isabela@ifranco.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-087", entryDate: TODAY_DATE, name: "Jader Almeida", company: "JA Studio", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "jader@jalmeida.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-088", entryDate: TODAY_DATE, name: "Karina Alonso", company: "KA Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "karina@kalonso.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-089", entryDate: TODAY_DATE, name: "Luciana Tomas", company: "LT Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "luciana@ltomas.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-090", entryDate: TODAY_DATE, name: "Marcos Bertoldi", company: "MB Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "marcos@mbertoldi.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-091", entryDate: TODAY_DATE, name: "Nelson Wilbert", company: "NW Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "nelson@nwilbert.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-092", entryDate: TODAY_DATE, name: "Olga Kormann", company: "OK Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "olga@okormann.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-093", entryDate: TODAY_DATE, name: "Patricia Totaro", company: "PT Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "patricia@ptotaro.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-094", entryDate: TODAY_DATE, name: "Queila Cunha", company: "QC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "queila@qcunha.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-095", entryDate: TODAY_DATE, name: "Roberto Migotto", company: "RM Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "roberto@rmigotto.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-096", entryDate: TODAY_DATE, name: "Sandra Pires", company: "SP Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "sandra@spires.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-097", entryDate: TODAY_DATE, name: "Tania Bertolucci", company: "TB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "tania@tbertolucci.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-098", entryDate: TODAY_DATE, name: "Ubiratan Pio", company: "UP Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "ubiratan@upio.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-099", entryDate: TODAY_DATE, name: "Valeria Gontijo", company: "VG Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "valeria@vgontijo.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-100", entryDate: TODAY_DATE, name: "Wesley Lemos", company: "WL Studio", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "wesley@wlemos.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-101", entryDate: TODAY_DATE, name: "Xenia Rosa", company: "XR Design", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "xenia@xrosa.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-102", entryDate: TODAY_DATE, name: "Yuri Costa", company: "YC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "yuri@ycosta.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-103", entryDate: TODAY_DATE, name: "Zilda Helal", company: "ZH Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "zilda@zhelal.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-104", entryDate: TODAY_DATE, name: "Alexandre Milleto", company: "AM Arquitetos", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "alexandre@amilleto.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-105", entryDate: TODAY_DATE, name: "Bianca da Hora", company: "BD Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "bianca@bdahora.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-106", entryDate: TODAY_DATE, name: "Caio D'Alcantara", company: "CD Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "caio@cdalcantara.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-107", entryDate: TODAY_DATE, name: "Daniela Saliture", company: "DS Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "daniela@dsaliture.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-108", entryDate: TODAY_DATE, name: "Eduardo Escorel", company: "EE Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99733-4455", email: "eduardo@eescorel.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-109", entryDate: TODAY_DATE, name: "Flavia Medina", company: "FM Studio", city: "Rio de Janeiro/RJ", phone: "(21) 98844-5566", email: "flavia@fmedina.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-110", entryDate: TODAY_DATE, name: "Gabriel Bordin", company: "GB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98955-6677", email: "gabriel@gbordin.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-111", entryDate: TODAY_DATE, name: "Heloisa Diniz", company: "HD Studio", city: "Rio de Janeiro/RJ", phone: "(21) 99066-7788", email: "heloisa@hdiniz.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-112", entryDate: TODAY_DATE, name: "Isis Corgozinho", company: "IC Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98177-8899", email: "isis@icorgozinho.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-113", entryDate: TODAY_DATE, name: "Joana Queiroz", company: "JQ Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98288-9900", email: "joana@jqueiroz.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-114", entryDate: TODAY_DATE, name: "Karen Pisacane", company: "KP Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 99399-0011", email: "karen@kpisacane.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-115", entryDate: TODAY_DATE, name: "Lucas Lage", company: "LL Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98400-1122", email: "lucas@llage.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-116", entryDate: TODAY_DATE, name: "Mariana Bomeny", company: "MB Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98511-2233", email: "mariana@mbomeny.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-117", entryDate: TODAY_DATE, name: "Natasha Gabrich", company: "NG Arquitetura", city: "Rio de Janeiro/RJ", phone: "(21) 98622-3344", email: "natasha@ngabrich.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-118", entryDate: TODAY_DATE, name: "Camila De Matos Queiros Saavedra", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 98157-9737", email: "escritorio@camilasaavedra.com.br", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-119", entryDate: TODAY_DATE, name: "Fabio De Magalhaes", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 97139-5487", email: "fabiomagalhaes.arq@hotmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] },
+      { id: "PL-120", entryDate: TODAY_DATE, name: "Juliana Fusuma Garcia", company: "", city: "Rio de Janeiro/RJ", phone: "(21) 97172-7375 / (21) 96021-3014", email: "julianafusuma@gmail.com", consultant: "", status: "Novo", nextFollowUp: "", history: [] }
+    ];
+
+    let state = {
+      users: DEFAULT_USERS,
+      architects: [],
+      events: [],
+      currentUser: JSON.parse(localStorage.getItem('proup_session')) || null,
+      currentTab: 'architects',
+      architectViewMode: 'cards',
+      searchQuery: '',
+      consultantFilter: 'all',
+      statusFilter: 'all',
+      selectedArchForFeedback: null,
+      selectedArchHistory: null,
+      showAddArchModal: false,
+      showAddUserModal: false,
+      showAddEventModal: false,
+      selectedEventForGuests: null,
+      editingUser: null
+    };
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+      const toast = document.createElement('div');
+      toast.className = 'toast-notification pointer-events-auto px-4 py-3 rounded-xl shadow-2xl text-xs font-semibold text-white flex items-center gap-2 ' + (type === 'success' ? 'bg-emerald-700 border border-emerald-500' : 'bg-rose-700 border border-rose-500');
+      toast.innerHTML = '<i class="fa-solid ' + (type === 'success' ? 'fa-circle-check text-emerald-300' : 'fa-triangle-exclamation text-rose-300') + '"></i> ' + message;
+      container.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3500);
+    }
+
+    async function initSupabase() {
+      try {
+        if (window.supabase) {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          isSupabaseActive = true;
+          await loadDataFromSupabase();
+        }
+      } catch (e) {
+        console.error("Erro Supabase:", e);
+        isSupabaseActive = false;
+        state.architects = PLANILHA_UNASSIGNED_120;
+        render();
+      }
+    }
+
+    async function loadDataFromSupabase() {
+      if (!isSupabaseActive) return;
+      try {
+        const { data: archs } = await supabaseClient.from('architects').select('*');
+        
+        if (archs && archs.length > 0) {
+          // Mantém TODOS os arquitetos já existentes no banco (os 29 que seus consultores já preencheram)
+          let currentList = archs;
+          let addedCount = 0;
+          
+          // Adiciona apenas os 120 da planilha que ainda não constam na base pelo nome
+          for (let newArch of PLANILHA_UNASSIGNED_120) {
+            const exists = currentList.some(function(a) { return a.name.toLowerCase().trim() === newArch.name.toLowerCase().trim(); });
+            if (!exists) {
+              currentList.push(newArch);
+              if (supabaseClient) {
+                await supabaseClient.from('architects').upsert([newArch]);
+              }
+              addedCount++;
+            }
+          }
+          state.architects = currentList;
+          if (addedCount > 0) {
+            showToast(addedCount + " novos arquitetos da planilha adicionados à fila com sucesso!");
+          }
+        } else {
+          // Se o banco estiver totalmente vazio, carrega os 120
+          state.architects = PLANILHA_UNASSIGNED_120;
+          for (let a of PLANILHA_UNASSIGNED_120) {
+            await supabaseClient.from('architects').upsert([a]);
+          }
+        }
+
+        const { data: users } = await supabaseClient.from('users').select('*');
+        if (users && users.length > 0) state.users = users;
+        else {
+          for (let u of DEFAULT_USERS) await supabaseClient.from('users').upsert([u]);
+        }
+
+        const { data: events } = await supabaseClient.from('events').select('*');
+        if (events) state.events = events;
+
+        render();
+      } catch (e) {
+        console.error("Erro ao carregar dados:", e);
+        state.architects = PLANILHA_UNASSIGNED_120;
+        render();
+      }
+    }
+
+    async function saveConsultantAssignment(archId) {
+      const selectEl = document.getElementById('select-consultant-' + archId);
+      if (!selectEl) return;
+      const newConsultant = selectEl.value;
+
+      const arch = state.architects.find(function(a) { return a.id === archId; });
+      if (arch) {
+        arch.consultant = newConsultant;
+        if (isSupabaseActive && supabaseClient) {
+          const { error } = await supabaseClient.from('architects').upsert([arch]);
+          if (error) showToast("Erro: " + error.message, "error");
+          else showToast("Sucesso! " + arch.name + " atribuído a " + (newConsultant || 'Fila') + ".");
+        }
+        render();
+      }
+    }
+
+    async function updateArchStatusDirect(archId) {
+      const selectEl = document.getElementById('select-status-' + archId);
+      if (!selectEl) return;
+      const newStatus = selectEl.value;
+
+      const arch = state.architects.find(function(a) { return a.id === archId; });
+      if (arch) {
+        arch.status = newStatus;
+        if (!arch.history) arch.history = [];
+        arch.history.push({
+          date: new Date().toISOString().split('T')[0],
+          user: state.currentUser.name,
+          status: newStatus,
+          channel: 'Direto na Lista',
+          followUpDate: arch.nextFollowUp || 'Não agendado',
+          notes: 'Status alterado diretamente para: ' + newStatus
+        });
+
+        if (isSupabaseActive && supabaseClient) {
+          const { error } = await supabaseClient.from('architects').upsert([arch]);
+          if (error) showToast("Erro: " + error.message, "error");
+          else showToast("Status atualizado para: " + newStatus);
+        } else {
+          showToast("Status atualizado para: " + newStatus);
+        }
+        render();
+      }
+    }
+
+    async function createNewArchitect(e) {
+      e.preventDefault();
+      const name = document.getElementById('new-arch-name').value.trim();
+      const company = document.getElementById('new-arch-company').value.trim();
+      const city = document.getElementById('new-arch-city').value.trim() || "Rio de Janeiro/RJ";
+      const phone = document.getElementById('new-arch-phone').value.trim();
+      const email = document.getElementById('new-arch-email').value.trim();
+      
+      let consultant = "";
+      const consultantSelect = document.getElementById('new-arch-consultant');
+      if (consultantSelect) {
+        consultant = consultantSelect.value;
+      } else {
+        consultant = state.currentUser.name;
+      }
+
+      const newId = "USR-" + Date.now();
+      const newArch = {
+        id: newId,
+        entryDate: new Date().toISOString().split('T')[0],
+        name: name,
+        company: company,
+        city: city,
+        phone: phone,
+        email: email,
+        consultant: consultant,
+        status: "Novo",
+        nextFollowUp: "",
+        history: []
+      };
+
+      if (isSupabaseActive && supabaseClient) {
+        const { error } = await supabaseClient.from('architects').upsert([newArch]);
+        if (error) showToast("Erro: " + error.message, "error");
+        else {
+          state.architects.unshift(newArch);
+          showToast("Novo arquiteto salvo!");
+        }
+      } else {
+        state.architects.unshift(newArch);
+      }
+
+      state.showAddArchModal = false;
+      render();
+    }
+
+    async function deleteArchitect(archId) {
+      if (!confirm("Tem certeza que deseja excluir este arquiteto do sistema?")) return;
+      
+      state.architects = state.architects.filter(function(a) { return a.id !== archId; });
+      if (isSupabaseActive && supabaseClient) {
+        const { error } = await supabaseClient.from('architects').delete().eq('id', archId);
+        if (error) showToast("Erro ao excluir: " + error.message, "error");
+        else showToast("Arquiteto excluído com sucesso!");
+      } else {
+        showToast("Arquiteto excluído com sucesso!");
+      }
+      render();
+    }
+
+    async function createNewUser(e) {
+      e.preventDefault();
+      const name = document.getElementById('new-u-name').value.trim();
+      const username = document.getElementById('new-u-username').value.trim().toLowerCase();
+      const pass = document.getElementById('new-u-pass').value.trim();
+      const role = document.getElementById('new-u-role').value;
+
+      const newUser = { username: username, pass: pass, name: name, role: role };
+      if (isSupabaseActive && supabaseClient) {
+        const { error } = await supabaseClient.from('users').upsert([newUser]);
+        if (error) showToast("Erro: " + error.message, "error");
+        else {
+          state.users.push(newUser);
+          showToast("Usuário criado!");
+        }
+      } else {
+        state.users.push(newUser);
+      }
+      state.showAddUserModal = false;
+      render();
+    }
+
+    async function saveEditedUser(e, oldUsername) {
+      e.preventDefault();
+      const name = document.getElementById('edit-u-name').value.trim();
+      const username = document.getElementById('edit-u-username').value.trim().toLowerCase();
+      const pass = document.getElementById('edit-u-pass').value.trim();
+      const role = document.getElementById('edit-u-role').value;
+
+      const u = state.users.find(function(user) { return user.username === oldUsername; });
+      if (u) {
+        if (oldUsername !== username && isSupabaseActive && supabaseClient) {
+          await supabaseClient.from('users').delete().eq('username', oldUsername);
+        }
+        u.name = name; u.username = username; u.pass = pass; u.role = role;
+        if (isSupabaseActive && supabaseClient) {
+          await supabaseClient.from('users').upsert([u]);
+          showToast("Usuário atualizado!");
+        }
+        state.editingUser = null;
+        render();
+      }
+    }
+
+    async function createNewEvent(e) {
+      e.preventDefault();
+      const title = document.getElementById('ev-title').value.trim();
+      const date = document.getElementById('ev-date').value;
+      const location = document.getElementById('ev-location').value.trim();
+
+      const newEvent = {
+        id: 'EV-' + Date.now(),
+        title: title,
+        date: date,
+        location: location,
+        guests: []
+      };
+
+      if (isSupabaseActive && supabaseClient) {
+        const { error } = await supabaseClient.from('events').upsert([newEvent]);
+        if (error) showToast("Erro ao criar evento: " + error.message, "error");
+        else {
+          state.events.unshift(newEvent);
+          showToast("Evento criado com sucesso!");
+        }
+      } else {
+        state.events.unshift(newEvent);
+      }
+      state.showAddEventModal = false;
+      render();
+    }
+
+    async function addGuestToEvent(e, eventId) {
+      e.preventDefault();
+      const name = document.getElementById('gst-name').value.trim();
+      const company = document.getElementById('gst-company').value.trim();
+      const contact = document.getElementById('gst-contact').value.trim();
+      const confirmed = document.getElementById('gst-confirmed').value;
+
+      const ev = state.events.find(function(ev) { return ev.id === eventId; });
+      if (ev) {
+        if (!ev.guests) ev.guests = [];
+        ev.guests.push({
+          id: 'G-' + Date.now(),
+          name: name,
+          company: company,
+          contact: contact,
+          confirmed: confirmed,
+          attended: 'Não',
+          addedBy: state.currentUser.name
+        });
+
+        if (isSupabaseActive && supabaseClient) {
+          await supabaseClient.from('events').upsert([ev]);
+          showToast("Convidado adicionado!");
+        }
+        render();
+      }
+    }
+
+    async function updateGuestStatus(eventId, guestId, field, value) {
+      const ev = state.events.find(function(ev) { return ev.id === eventId; });
+      if (ev && ev.guests) {
+        const guest = ev.guests.find(function(g) { return g.id === guestId; });
+        if (guest) {
+          guest[field] = value;
+          if (isSupabaseActive && supabaseClient) {
+            await supabaseClient.from('events').upsert([ev]);
+            showToast("Atualizado!");
+          }
+          render();
+        }
+      }
+    }
+
+    async function removeGuestFromEvent(eventId, guestId) {
+      if (!confirm("Tem certeza que deseja remover este convidado?")) return;
+      const ev = state.events.find(function(e) { return e.id === eventId; });
+      if (ev && ev.guests) {
+        ev.guests = ev.guests.filter(function(g) { return g.id !== guestId; });
+        if (isSupabaseActive && supabaseClient) {
+          await supabaseClient.from('events').upsert([ev]);
+          showToast("Convidado removido com sucesso!");
+        }
+        render();
+      }
+    }
+
+    function exportEventCSV(eventId) {
+      const ev = state.events.find(function(ev) { return ev.id === eventId; });
+      if (!ev || !ev.guests || ev.guests.length === 0) {
+        alert("Nenhum convidado nesta lista.");
+        return;
+      }
+      let csv = "Nome,Empresa,Contato,Confirmado,Compareceu,Adicionado Por\n";
+      ev.guests.forEach(function(g) {
+        csv += '"' + g.name + '","' + g.company + '","' + g.contact + '","' + g.confirmed + '","' + g.attended + '","' + g.addedBy + '"\n';
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'convidados_' + ev.title.replace(/\s+/g, '_') + '.csv';
+      a.click();
+    }
+
+    function exportEventPDF(eventId) {
+      const ev = state.events.find(function(ev) { return ev.id === eventId; });
+      if (!ev) return;
+
+      const printWindow = window.open('', '_blank');
+      let guestsHtml = '';
+      if (!ev.guests || ev.guests.length === 0) {
+        guestsHtml = '<tr><td colspan="6" style="text-align: center; color: #9CA3AF; padding: 20px;">Nenhum convidado cadastrado.</td></tr>';
+      } else {
+        ev.guests.forEach(function(g) {
+          guestsHtml += '<tr>' +
+            '<td><strong>' + g.name + '</strong></td>' +
+            '<td>' + (g.company || '-') + '</td>' +
+            '<td>' + g.contact + '</td>' +
+            '<td class="' + (g.confirmed === 'Sim' ? 'badge-sim' : '') + '">' + g.confirmed + '</td>' +
+            '<td class="' + (g.attended === 'Sim' ? 'badge-sim' : '') + '">' + g.attended + '</td>' +
+            '<td>' + g.addedBy + '</td>' +
+            '</tr>';
+        });
+      }
+
+      printWindow.document.write(
+        '<!DOCTYPE html>' +
+        '<html lang="pt-BR">' +
+        '<head>' +
+        '<meta charset="UTF-8">' +
+        '<title>Lista de Convidados - ' + ev.title + '</title>' +
+        '<style>' +
+        "body { font-family: 'Inter', sans-serif; color: #1C231E; margin: 30px; }" +
+        ".header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #2D3A31; padding-bottom: 15px; margin-bottom: 20px; }" +
+        ".logo-box { background-color: #2D3A31; color: white; padding: 10px 20px; border-radius: 8px; font-family: 'Outfit', sans-serif; font-size: 20px; letter-spacing: 0.2em; font-weight: 300; text-transform: lowercase; }" +
+        ".event-info h1 { font-size: 22px; color: #2D3A31; margin: 0 0 5px 0; font-family: 'Outfit', sans-serif; }" +
+        ".event-info p { font-size: 12px; color: #616F65; margin: 2px 0; }" +
+        "table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }" +
+        "th { background-color: #2D3A31; color: white; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; }" +
+        "td { padding: 10px; border-bottom: 1px solid #E1E6E2; }" +
+        "tr:nth-child(even) { background-color: #F4F6F4; }" +
+        ".badge-sim { color: #047857; font-weight: bold; }" +
+        ".footer { margin-top: 40px; text-align: center; font-size: 10px; color: #9CA3AF; border-top: 1px solid #E1E6E2; padding-top: 10px; }" +
+        '</style>' +
+        '</head>' +
+        '<body>' +
+        '<div class="header">' +
+        '<div class="event-info">' +
+        '<h1>' + ev.title + '</h1>' +
+        '<p><strong>Data:</strong> ' + ev.date + ' | <strong>Local:</strong> ' + (ev.location || 'Não especificado') + '</p>' +
+        '<p><strong>Total de Convidados:</strong> ' + (ev.guests ? ev.guests.length : 0) + '</p>' +
+        '</div>' +
+        '<div class="logo-box">pro up</div>' +
+        '</div>' +
+        '<table>' +
+        '<thead><tr><th>Convidado</th><th>Empresa</th><th>Contato</th><th>Confirmado</th><th>Compareceu</th><th>Adicionado Por</th></tr></thead>' +
+        '<tbody>' + guestsHtml + '</tbody>' +
+        '</table>' +
+        '<div class="footer">Pro Up CRM • Relatório gerado em ' + new Date().toLocaleDateString('pt-BR') + '</div>' +
+        '<script>window.onload = function() { window.print(); };<' + '/script>' +
+        '</body>' +
+        '</html>'
+      );
+      printWindow.document.close();
+    }
+
+    function daysSince(dateStr) {
+      if (!dateStr) return 0;
+      const now = new Date();
+      const past = new Date(dateStr);
+      return Math.floor(Math.abs(now - past) / (1000 * 60 * 60 * 24));
+    }
+
+    function getLastContactDate(arch) {
+      if (arch.history && arch.history.length > 0) return arch.history[arch.history.length - 1].date;
+      return arch.entryDate;
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const u = document.getElementById('login-u').value.trim().toLowerCase();
+      const p = document.getElementById('login-p').value.trim();
+      const found = state.users.find(function(user) { return user.username.toLowerCase() === u && user.pass === p; });
+      if (found) {
+        state.currentUser = found;
+        localStorage.setItem('proup_session', JSON.stringify(state.currentUser));
+        render();
+      } else {
+        alert("Usuário ou senha incorretos!");
+      }
+    }
+
+    function logout() {
+      state.currentUser = null;
+      localStorage.removeItem('proup_session');
+      render();
+    }
+
+    async function addFeedback(e, archId) {
+      e.preventDefault();
+      const status = document.getElementById('fb-status').value;
+      const followUp = document.getElementById('fb-followup').value;
+      const channel = document.getElementById('fb-channel').value;
+      const otherChannel = document.getElementById('fb-other-channel') ? document.getElementById('fb-other-channel').value.trim() : '';
+      const notes = document.getElementById('fb-notes').value.trim();
+
+      const finalChannel = channel === 'Outro' ? (otherChannel || 'Outro') : channel;
+
+      const arch = state.architects.find(function(a) { return a.id === archId; });
+      if (arch) {
+        arch.status = status;
+        if (followUp) arch.nextFollowUp = followUp;
+        if (!arch.history) arch.history = [];
+        
+        arch.history.push({
+          date: new Date().toISOString().split('T')[0],
+          user: state.currentUser.name,
+          status: status,
+          channel: finalChannel,
+          followUpDate: followUp || 'Não agendado',
+          notes: notes
+        });
+
+        if (isSupabaseActive && supabaseClient) {
+          const { error } = await supabaseClient.from('architects').upsert([arch]);
+          if (error) showToast("Erro ao salvar feedback: " + error.message, "error");
+          else showToast("Feedback salvo com sucesso!");
+        }
+
+        state.selectedArchForFeedback = null;
+        render();
+      }
+    }
+
+    function render() {
+      const app = document.getElementById('app');
+      if (!state.currentUser) {
+        app.innerHTML = renderLogin();
+        return;
+      }
+
+      const isElevated = state.currentUser.role === 'admin' || state.currentUser.role === 'supervisor';
+
+      let navTabs = '<button onclick="state.currentTab=\'architects\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'architects' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '">Arquitetos</button>';
+      
+      if (isElevated) {
+        navTabs += '<button onclick="state.currentTab=\'crm-kanban\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'crm-kanban' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '"><i class="fa-solid fa-columns mr-1"></i> CRM por Consultor</button>';
+      } else {
+        navTabs += '<button onclick="state.currentTab=\'my-followups\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'my-followups' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '"><i class="fa-solid fa-clock-rotate-left mr-1"></i> Meus Follow-ups</button>';
+      }
+
+      navTabs += '<button onclick="state.currentTab=\'events\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'events' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '">Eventos</button>';
+      
+      if (isElevated) {
+        navTabs += '<button onclick="state.currentTab=\'audit\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'audit' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '">Auditoria</button>' +
+                   '<button onclick="state.currentTab=\'users\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'users' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '">Usuários</button>';
+      }
+
+      navTabs += '<button onclick="state.currentTab=\'manual\'; render();" class="px-3 py-1.5 text-xs font-semibold rounded ' + (state.currentTab === 'manual' ? 'bg-white text-brand' : 'text-gray-200 hover:text-white') + '"><i class="fa-solid fa-book-open mr-1"></i> Manual de Prospecção</button>';
+
+      app.innerHTML = 
+        '<header class="bg-brand text-white shadow sticky top-0 z-20">' +
+          '<div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">' +
+            '<div class="flex items-center space-x-3">' +
+              '<div class="bg-brand-bg px-3 py-1 rounded text-brand font-brand tracking-widest text-lg font-light lowercase">pro up</div>' +
+              '<span class="text-xs text-gray-300 hidden md:inline border-l border-white/20 pl-3">CRM & Parcerias</span>' +
+              '<span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">' +
+                '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Supabase Conectado' +
+              '</span>' +
+            '</div>' +
+            '<nav class="flex space-x-2">' + navTabs + '</nav>' +
+            '<div class="flex items-center space-x-3">' +
+              '<div class="text-right text-xs hidden sm:block">' +
+                '<p class="font-bold leading-tight">' + state.currentUser.name + '</p>' +
+                '<p class="text-[10px] text-emerald-300 uppercase">' + (state.currentUser.role === 'admin' ? 'Administrador' : (state.currentUser.role === 'supervisor' ? 'Supervisora' : 'Consultor')) + '</p>' +
+              '</div>' +
+              '<button onclick="logout()" class="p-2 text-gray-300 hover:text-white" title="Sair"><i class="fa-solid fa-right-from-bracket"></i></button>' +
+            '</div>' +
+          '</div>' +
+        '</header>' +
+        '<main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6">' + renderTabContent(isElevated) + '</main>' +
+        (state.showAddArchModal ? renderAddArchModal() : '') +
+        (state.showAddUserModal ? renderAddUserModal() : '') +
+        (state.showAddEventModal ? renderAddEventModal() : '') +
+        (state.selectedEventForGuests ? renderEventGuestsModal() : '') +
+        (state.editingUser ? renderEditUserModal() : '') +
+        (state.selectedArchForFeedback ? renderFeedbackModal() : '') +
+        (state.selectedArchHistory ? renderHistoryModal() : '');
+
+      if (state.currentTab === 'audit' && isElevated) {
+        setTimeout(initAuditCharts, 100);
+      }
+    }
+
+    function renderLogin() {
+      return '<div class="min-h-screen flex items-center justify-center bg-[#2D3A31] p-4">' +
+        '<div class="max-w-md w-full bg-white rounded-2xl shadow-2xl border border-white/10 p-8 text-center">' +
+        '<div class="inline-block bg-[#2D3A31] px-6 py-3 rounded-lg border border-white/20 mb-6 shadow-inner">' +
+        '<span class="font-brand text-3xl tracking-[0.25em] text-white font-light lowercase">pro up</span>' +
+        '</div>' +
+        '<p class="text-xs text-brand-muted uppercase font-bold tracking-wider mb-6">Acesso ao Sistema de Gestão</p>' +
+        '<form onsubmit="handleLogin(event)" class="space-y-4 text-left">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Usuário</label>' +
+        '<input type="text" id="login-u" required class="w-full p-3 bg-brand-bg border border-brand-border rounded-lg text-sm text-brand-text focus:ring-2 focus:ring-brand outline-none" placeholder="Ex: carlos, vitor, miriam"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Senha</label>' +
+        '<input type="password" id="login-p" required class="w-full p-3 bg-brand-bg border border-brand-border rounded-lg text-sm text-brand-text focus:ring-2 focus:ring-brand outline-none" placeholder="••••••••"></div>' +
+        '<button type="submit" class="w-full py-3 bg-brand text-white font-semibold rounded-lg hover:bg-brand-light transition shadow text-sm">Entrar no Sistema</button>' +
+        '</form></div></div>';
+    }
+
+    function renderTabContent(isElevated) {
+      if (state.currentTab === 'users' && isElevated) return renderUsersManagement();
+      if (state.currentTab === 'audit' && isElevated) return renderAuditDashboard();
+      if (state.currentTab === 'crm-kanban' && isElevated) return renderCrmKanbanByConsultant();
+      if (state.currentTab === 'my-followups' && !isElevated) return renderConsultantFollowUps();
+      if (state.currentTab === 'events') return renderEventsManagement();
+      if (state.currentTab === 'manual') return renderManualTab();
+      return renderArchitectsList(isElevated);
+    }
+
+    function renderCrmKanbanByConsultant() {
+      const selectedCons = window.kanbanConsultantFilter || 'all';
+      let consultants = state.users.filter(function(u) { return u.role === 'consultant'; });
+      
+      if (selectedCons !== 'all') {
+        consultants = consultants.filter(function(c) { return c.name === selectedCons; });
+      }
+
+      const statuses = ['Novo', 'Em Contato', 'Reunião marcada', 'Proposta Enviada', 'Parceria Fechada', 'Sem Interesse'];
+
+      let rowsHtml = '';
+      consultants.forEach(function(cons) {
+        const consArchs = state.architects.filter(function(a) { return a.consultant === cons.name; });
+        
+        let columnsHtml = '';
+        statuses.forEach(function(st) {
+          const stArchs = consArchs.filter(function(a) { return a.status === st; });
+          
+          let cardsHtml = '';
+          if (stArchs.length === 0) {
+            cardsHtml = '<p class="text-[11px] text-gray-400 italic text-center py-4">Nenhum</p>';
+          } else {
+            stArchs.forEach(function(arch) {
+              cardsHtml += '<div class="bg-white p-3 rounded-lg border border-brand-border shadow-sm space-y-2 text-xs mb-2 hover:shadow-md transition">' +
+                '<div class="flex justify-between items-start">' +
+                  '<strong class="text-brand cursor-pointer hover:underline" onclick="state.selectedArchHistory=\'' + arch.id + '\'; render();">' + arch.name + '</strong>' +
+                  '<button onclick="state.selectedArchForFeedback=\'' + arch.id + '\'; render();" class="text-emerald-700 hover:text-emerald-900 p-1" title="Atualizar Feedback"><i class="fa-solid fa-pen"></i></button>' +
+                '</div>' +
+                '<p class="text-[11px] text-brand-muted">' + (arch.company || 'Escritório Particular') + '</p>' +
+                '<div class="flex justify-between items-center text-[10px] pt-1 border-t border-brand-border/60 text-gray-500">' +
+                  '<span><i class="fa-solid fa-phone mr-1"></i>' + arch.phone + '</span>' +
+                  (arch.nextFollowUp ? '<span class="text-amber-700 font-bold"><i class="fa-regular fa-clock mr-1"></i>' + arch.nextFollowUp + '</span>' : '') +
+                '</div>' +
+              '</div>';
+            });
+          }
+
+          columnsHtml += '<div class="bg-brand-bg/60 rounded-xl p-3 border border-brand-border flex flex-col min-w-[200px] max-w-[240px] flex-1">' +
+            '<div class="flex justify-between items-center mb-2 pb-1 border-b border-brand-border">' +
+              '<span class="font-bold text-[11px] uppercase tracking-wide text-brand">' + st + '</span>' +
+              '<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-brand text-white font-bold">' + stArchs.length + '</span>' +
+            '</div>' +
+            '<div class="flex-1 overflow-y-auto max-h-96 pr-1 space-y-2">' + cardsHtml + '</div>' +
+          '</div>';
+        });
+
+        rowsHtml += '<div class="bg-white p-5 rounded-2xl border border-brand-border shadow-sm space-y-4">' +
+          '<div class="flex justify-between items-center border-b pb-3">' +
+            '<div class="flex items-center gap-3">' +
+              '<div class="w-10 h-10 rounded-full bg-brand text-white flex items-center justify-center font-bold text-sm">' + cons.name.charAt(0) + '</div>' +
+              '<div><h3 class="font-bold text-base text-brand">' + cons.name + '</h3><p class="text-xs text-brand-muted">Total na carteira: <strong class="text-brand">' + consArchs.length + ' arquitetos</strong></p></div>' +
+            '</div>' +
+            '<span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full">Ativo no CRM</span>' +
+          '</div>' +
+          '<div class="flex gap-3 overflow-x-auto pb-2">' + columnsHtml + '</div>' +
+        '</div>';
+      });
+
+      return '<div class="space-y-6">' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">' +
+        '<div><h2 class="text-xl font-bold text-brand">CRM por Consultor (Funil de Vendas)</h2><p class="text-xs text-brand-muted">Acompanhe visualmente o andamento dos arquitetos de cada consultor.</p></div>' +
+        '<div><label class="block text-[10px] text-brand-muted uppercase font-bold mb-1">Filtrar Consultor:</label>' +
+        '<select onchange="window.kanbanConsultantFilter=this.value; render();" class="p-2 bg-brand-bg border border-brand-border rounded text-xs font-semibold">' +
+        '<option value="all" ' + (selectedCons === 'all' ? 'selected' : '') + '>Todos os Consultores</option>' +
+        state.users.filter(function(u) { return u.role === 'consultant'; }).map(function(u) {
+          return '<option value="' + u.name + '" ' + (selectedCons === u.name ? 'selected' : '') + '>' + u.name + '</option>';
+        }).join('') +
+        '</select></div></div>' +
+        '<div class="space-y-6">' + rowsHtml + '</div>' +
+      '</div>';
+    }
+
+    function renderConsultantFollowUps() {
+      const myName = state.currentUser.name;
+      const myArchs = state.architects.filter(function(a) { return (a.consultant || '').trim().toLowerCase() === myName.trim().toLowerCase(); });
+      
+      const todayStr = new Date().toISOString().split('T')[0];
+      const pendingFollowUps = myArchs.filter(function(a) { return a.nextFollowUp && a.status !== 'Parceria Fechada' && a.status !== 'Sem Interesse'; }).sort(function(a, b) { return a.nextFollowUp.localeCompare(b.nextFollowUp); });
+
+      let rows = '';
+      if (pendingFollowUps.length === 0) {
+        rows = '<tr><td colspan="5" class="p-8 text-center text-gray-400 italic">Nenhum follow-up agendado no momento. Parabéns!</td></tr>';
+      } else {
+        pendingFollowUps.forEach(function(a) {
+          const isLate = a.nextFollowUp < todayStr;
+          const isToday = a.nextFollowUp === todayStr;
+          rows += '<tr class="hover:bg-brand-bg/50">' +
+            '<td class="p-3 font-bold text-brand">' + a.name + '<span class="block text-[10px] text-brand-muted">' + (a.company || 'Escritório Particular') + '</span></td>' +
+            '<td class="p-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-brand/10 text-brand">' + a.status + '</span></td>' +
+            '<td class="p-3"><span class="px-2.5 py-1 rounded-full text-xs font-bold ' + (isLate ? 'bg-rose-100 text-rose-700' : (isToday ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')) + '">' + a.nextFollowUp + (isLate ? ' (Atrasado)' : (isToday ? ' (Hoje)' : '')) + '</span></td>' +
+            '<td class="p-3">' + a.phone + '</td>' +
+            '<td class="p-3 text-center"><button onclick="state.selectedArchForFeedback=\'' + a.id + '\'; render();" class="px-3 py-1 bg-brand text-white text-xs font-semibold rounded hover:bg-brand-light transition">+ Registrar Contato</button></td></tr>';
+        });
+      }
+
+      return '<div class="space-y-6">' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex justify-between items-center">' +
+        '<div><h2 class="text-xl font-bold text-brand">Meus Follow-ups Pendentes</h2><p class="text-xs text-brand-muted">Acompanhe todos os seus retornos agendados para manter o relacionamento redondo.</p></div>' +
+        '</div>' +
+        '<div class="bg-white rounded-xl border border-brand-border shadow-sm overflow-x-auto">' +
+        '<table class="w-full text-left border-collapse text-xs">' +
+        '<thead><tr class="bg-brand text-white uppercase text-[10px]"><th class="p-3">Arquiteto(a)</th><th class="p-3">Status Atual</th><th class="p-3">Data Agendada</th><th class="p-3">Contato</th><th class="p-3 text-center">Ação</th></tr></thead>' +
+        '<tbody class="divide-y divide-brand-border">' + rows + '</tbody>' +
+        '</table></div></div>';
+    }
+
+    function renderManualTab() {
+      return `
+        <div class="space-y-8 pb-12">
+          <div class="bg-gradient-to-r from-brand to-brand-light text-white p-8 rounded-2xl shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div class="space-y-2">
+              <span class="bg-white/20 text-emerald-200 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">Documento Oficial</span>
+              <h1 class="text-2xl md:text-3xl font-bold font-brand tracking-wide">Manual de Prospecção, Atendimento e Relacionamento</h1>
+              <p class="text-xs text-gray-200 max-w-2xl leading-relaxed">Diretrizes comerciais obrigatórias para consultores da Pro Up Zona Sul. Desenvolva sua carteira de parceiros de forma estratégica e estruturada.</p>
+            </div>
+            <div class="bg-white/10 border border-white/20 p-4 rounded-xl text-center backdrop-blur-sm shrink-0">
+              <span class="block text-2xl font-bold text-emerald-300">5 novos</span>
+              <span class="text-[11px] uppercase tracking-wider text-gray-300 font-semibold">Arquitetos / Semana</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="md:col-span-1 space-y-6">
+              <div class="bg-white p-6 rounded-2xl border border-brand-border shadow-sm space-y-3">
+                <div class="flex items-center gap-2 text-brand font-bold text-base">
+                  <i class="fa-solid fa-bullseye text-emerald-700"></i>
+                  <h3>1. Objetivo Principal</h3>
+                </div>
+                <p class="text-xs text-brand-muted leading-relaxed">
+                  Desenvolver uma carteira ativa de parceiros, ampliar a presença no mercado de arquitetura e gerar oportunidades por meio de especificações e vendas. O consultor atua como parceiro estratégico.
+                </p>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl border border-brand-border shadow-sm space-y-4">
+                <div class="flex items-center gap-2 text-brand font-bold text-base border-b pb-2">
+                  <i class="fa-solid fa-list-check text-emerald-700"></i>
+                  <h3>2. Regras Operacionais</h3>
+                </div>
+                <ul class="space-y-3 text-xs text-brand-muted">
+                  <li class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5"></i>
+                    <div><strong>Distribuição Semanal:</strong> 5 novos arquitetos liberados por semana para cada consultor.</div>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5"></i>
+                    <div><strong>Rotina Diária:</strong> Mínimo de 2 horas diárias dedicadas exclusivamente à prospecção.</div>
+                  </li>
+                  <li class="flex items-start gap-2">
+                    <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5"></i>
+                    <div><strong>Registro Obrigatório:</strong> Toda interação, canal e feedback devem ser atualizados no sistema.</div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="md:col-span-2 space-y-6">
+              <div class="bg-white p-6 rounded-2xl border border-brand-border shadow-sm space-y-4">
+                <div class="flex items-center gap-2 text-brand font-bold text-base border-b pb-2">
+                  <i class="fa-solid fa-route text-emerald-700"></i>
+                  <h3>3. Padrão de Abordagem em 4 Etapas</h3>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div class="p-3 bg-brand-bg rounded-xl border border-brand-border space-y-1">
+                    <span class="inline-block bg-brand text-white font-bold px-2 py-0.5 rounded text-[10px]">Etapa 1</span>
+                    <h4 class="font-bold text-brand">Apresentação</h4>
+                    <p class="text-brand-muted">Informar nome e ligação com a Pro Up Zona Sul.</p>
+                  </div>
+                  <div class="p-3 bg-brand-bg rounded-xl border border-brand-border space-y-1">
+                    <span class="inline-block bg-brand text-white font-bold px-2 py-0.5 rounded text-[10px]">Etapa 2</span>
+                    <h4 class="font-bold text-brand">Reconhecimento</h4>
+                    <p class="text-brand-muted">Mencionar projeto ou ambiente específico do arquiteto.</p>
+                  </div>
+                  <div class="p-3 bg-brand-bg rounded-xl border border-brand-border space-y-1">
+                    <span class="inline-block bg-brand text-white font-bold px-2 py-0.5 rounded text-[10px]">Etapa 3</span>
+                    <h4 class="font-bold text-brand">Conexão Comercial</h4>
+                    <p class="text-brand-muted">Apresentar peças e soluções dos nossos catálogos.</p>
+                  </div>
+                  <div class="p-3 bg-brand-bg rounded-xl border border-brand-border space-y-1">
+                    <span class="inline-block bg-brand text-white font-bold px-2 py-0.5 rounded text-[10px]">Etapa 4</span>
+                    <h4 class="font-bold text-brand">Convite para Avançar</h4>
+                    <p class="text-brand-muted">Propor envio de sugestões ou orçamento sob medida.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl border border-brand-border shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b pb-2">
+                  <div class="flex items-center gap-2 text-brand font-bold text-base">
+                    <i class="fa-solid fa-comments text-emerald-700"></i>
+                    <h3>4. Modelos de Mensagens Prontas</h3>
+                  </div>
+                  <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">Copie e Personalize</span>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                  <div class="p-4 bg-brand-bg rounded-xl border border-brand-border space-y-2">
+                    <div class="flex justify-between font-bold text-brand">
+                      <span>Abordagem Inicial no Instagram</span>
+                      <span class="text-emerald-700 font-normal">Prioritário</span>
+                    </div>
+                    <div class="p-3 bg-white rounded-lg border border-brand-border text-gray-700 italic">
+                      "Olá, [Nome do arquiteto]! Tudo bem? Meu nome é [Nome] e faço parte da equipe da Pro Up Zona Sul. Estava conhecendo seu trabalho e gostei muito do projeto [nome ou referência do projeto]. Gostaria de apresentar algumas opções que talvez façam sentido para seus projetos. Posso te enviar algumas sugestões do nosso catálogo?"
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderArchitectsList(isElevated) {
+      let filtered = state.architects.filter(function(a) {
+        if (!isElevated) {
+          if ((a.consultant || '').trim().toLowerCase() !== (state.currentUser.name || '').trim().toLowerCase()) return false;
+        } else if (state.consultantFilter !== 'all') {
+          if (state.consultantFilter === 'unassigned') {
+            if (a.consultant && a.consultant !== '') return false;
+          } else {
+            if (a.consultant !== state.consultantFilter) return false;
+          }
+        }
+        if (state.statusFilter !== 'all' && a.status !== state.statusFilter) return false;
+        if (state.searchQuery) {
+          const q = state.searchQuery.toLowerCase();
+          return a.name.toLowerCase().includes(q) || (a.company || '').toLowerCase().includes(q) || (a.phone || '').toLowerCase().includes(q);
+        }
+        return true;
+      });
+
+      const unassignedCount = state.architects.filter(function(a) { return !a.consultant || a.consultant === ''; }).length;
+
+      let listHtml = '<div class="space-y-6">' +
+        '<div class="bg-white p-4 rounded-xl border border-brand-border shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">' +
+        '<div class="flex items-center gap-3 w-full md:w-auto flex-wrap">' +
+        '<input type="text" value="' + state.searchQuery + '" oninput="state.searchQuery=this.value; render();" placeholder="Buscar por nome, escritório, telefone..." class="w-full md:w-72 p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none">' +
+        '<button onclick="state.showAddArchModal=true; render();" class="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded hover:bg-emerald-700 transition flex items-center gap-1 shadow whitespace-nowrap"><i class="fa-solid fa-plus"></i> Novo Arquiteto</button>' +
+        '</div>' +
+        '<div class="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">' +
+        // BOTÕES DE ALTERNAR VISUALIZAÇÃO (CARDS VS TABELA) - DISPONÍVEL PARA TODOS
+        '<div class="bg-brand-bg p-1 rounded-lg border border-brand-border flex gap-1">' +
+        '<button onclick="state.architectViewMode=\'cards\'; render();" class="px-3 py-1.5 rounded text-xs font-semibold ' + (state.architectViewMode === 'cards' ? 'bg-brand text-white shadow' : 'text-brand hover:bg-white') + '"><i class="fa-solid fa-grip mr-1"></i> Cards</button>' +
+        '<button onclick="state.architectViewMode=\'table\'; render();" class="px-3 py-1.5 rounded text-xs font-semibold ' + (state.architectViewMode === 'table' ? 'bg-brand text-white shadow' : 'text-brand hover:bg-white') + '"><i class="fa-solid fa-table-list mr-1"></i> Tabela</button>' +
+        '</div>';
+      
+      if (isElevated) {
+        listHtml += '<select onchange="state.consultantFilter=this.value; render();" class="p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium">' +
+          '<option value="all" ' + (state.consultantFilter === 'all' ? 'selected' : '') + '>Todos os Consultores (' + state.architects.length + ')</option>' +
+          '<option value="unassigned" ' + (state.consultantFilter === 'unassigned' ? 'selected' : '') + '>Sem Consultor (Fila: ' + unassignedCount + ')</option>';
+        
+        state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+          const cnt = state.architects.filter(function(a) { return a.consultant === u.name; }).length;
+          listHtml += '<option value="' + u.name + '" ' + (state.consultantFilter === u.name ? 'selected' : '') + '>' + u.name + ' (' + cnt + ')</option>';
+        });
+        listHtml += '</select>';
+      }
+
+      listHtml += '<select onchange="state.statusFilter=this.value; render();" class="p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium">' +
+        '<option value="all">Todos os Status</option>' +
+        '<option value="Novo">Novo</option>' +
+        '<option value="Em Contato">Em Contato</option>' +
+        '<option value="Reunião marcada">Reunião marcada</option>' +
+        '<option value="Proposta Enviada">Proposta Enviada</option>' +
+        '<option value="Parceria Fechada">Parceria Fechada</option>' +
+        '<option value="Sem Interesse">Sem Interesse</option>' +
+        '</select></div></div>';
+
+      if (filtered.length === 0) {
+        listHtml += '<div class="bg-white p-12 text-center rounded-xl border border-brand-border space-y-2">' +
+          '<i class="fa-solid fa-folder-open text-3xl text-brand-muted"></i>' +
+          '<p class="font-bold text-brand">Nenhum arquiteto encontrado para esta visualização.</p>' +
+          '</div>';
+      } else if (state.architectViewMode === 'table') {
+        let tableRows = '';
+        filtered.forEach(function(arch) {
+          const lastContact = getLastContactDate(arch);
+          const daysInactive = daysSince(lastContact);
+          const isOverdue = daysInactive > 7;
+          const isUnassigned = !arch.consultant || arch.consultant === '';
+
+          tableRows += '<tr class="hover:bg-brand-bg/50 ' + (isUnassigned ? 'bg-amber-50/20' : (isOverdue ? 'bg-rose-50/20' : '')) + '">' +
+            '<td class="p-3">' +
+              '<div class="font-bold text-brand cursor-pointer hover:underline" onclick="state.selectedArchHistory=\'' + arch.id + '\'; render();">' + arch.name + '</div>' +
+              '<div class="text-[11px] text-brand-muted">' + (arch.company || 'Escritório Particular') + '</div>' +
+            '</td>' +
+            '<td class="p-3 text-xs">' +
+              '<div><i class="fa-solid fa-phone mr-1 text-brand-muted"></i>' + (arch.phone || '-') + '</div>' +
+              (arch.email ? '<div class="text-[11px] text-gray-500 truncate max-w-xs"><i class="fa-solid fa-envelope mr-1 text-brand-muted"></i>' + arch.email + '</div>' : '') +
+            '</td>' +
+            '<td class="p-3">' +
+              '<select id="select-status-' + arch.id + '" onchange="updateArchStatusDirect(\'' + arch.id + '\')" class="p-1.5 bg-brand/10 border border-brand/20 rounded text-xs font-bold text-brand uppercase cursor-pointer outline-none">' +
+                '<option value="Novo" ' + (arch.status === 'Novo' ? 'selected' : '') + '>Novo</option>' +
+                '<option value="Em Contato" ' + (arch.status === 'Em Contato' ? 'selected' : '') + '>Em Contato</option>' +
+                '<option value="Reunião marcada" ' + (arch.status === 'Reunião marcada' ? 'selected' : '') + '>Reunião marcada</option>' +
+                '<option value="Proposta Enviada" ' + (arch.status === 'Proposta Enviada' ? 'selected' : '') + '>Proposta Enviada</option>' +
+                '<option value="Parceria Fechada" ' + (arch.status === 'Parceria Fechada' ? 'selected' : '') + '>Parceria Fechada</option>' +
+                '<option value="Sem Interesse" ' + (arch.status === 'Sem Interesse' ? 'selected' : '') + '>Sem Interesse</option>' +
+              '</select>' +
+            '</td>' +
+            '<td class="p-3 text-xs">';
+          
+          if (isElevated) {
+            tableRows += '<div class="flex gap-1 items-center">' +
+              '<select id="select-consultant-' + arch.id + '" class="p-1.5 ' + (isUnassigned ? 'bg-amber-100 border-amber-300' : 'bg-brand-bg border-brand-border') + ' rounded text-xs font-semibold text-brand">' +
+              '<option value="" ' + (isUnassigned ? 'selected' : '') + '>-- Fila --</option>';
+            state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+              tableRows += '<option value="' + u.name + '" ' + (arch.consultant === u.name ? 'selected' : '') + '>' + u.name + '</option>';
+            });
+            tableRows += '</select>' +
+              '<button onclick="saveConsultantAssignment(\'' + arch.id + '\')" class="p-1.5 bg-brand text-white rounded text-xs hover:bg-brand-light transition" title="Salvar Consultor"><i class="fa-solid fa-floppy-disk"></i></button>' +
+              '</div>';
+          } else {
+            tableRows += '<span class="font-semibold text-brand">' + (arch.consultant || 'Não Atribuído') + '</span>';
+          }
+
+          tableRows += '</td>' +
+            '<td class="p-3 text-center flex items-center justify-center gap-1.5">' +
+              '<button onclick="state.selectedArchForFeedback=\'' + arch.id + '\'; render();" class="px-2.5 py-1 bg-brand text-white text-[11px] font-semibold rounded hover:bg-brand-light transition">+ Feedback</button>' +
+              '<button onclick="state.selectedArchHistory=\'' + arch.id + '\'; render();" class="p-1.5 bg-brand-bg text-brand border border-brand-border text-xs rounded hover:bg-white transition" title="Ver Histórico"><i class="fa-solid fa-history"></i></button>' +
+              (arch.phone ? '<a href="https://wa.me/55' + arch.phone.replace(/\D/g, '') + '" target="_blank" class="p-1.5 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 transition" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>' : '') +
+              (isElevated ? '<button onclick="deleteArchitect(\'' + arch.id + '\')" class="p-1.5 text-gray-400 hover:text-rose-600" title="Excluir"><i class="fa-solid fa-trash-can"></i></button>' : '') +
+            '</td>' +
+            '</tr>';
+        });
+
+        listHtml += '<div class="bg-white rounded-xl border border-brand-border shadow-sm overflow-x-auto">' +
+          '<table class="w-full text-left border-collapse text-xs">' +
+          '<thead><tr class="bg-brand text-white uppercase text-[10px]"><th class="p-3">Arquiteto(a) / Escritório</th><th class="p-3">Contatos</th><th class="p-3">Status Atual</th><th class="p-3">Consultor</th><th class="p-3 text-center">Ações</th></tr></thead>' +
+          '<tbody class="divide-y divide-brand-border">' + tableRows + '</tbody>' +
+          '</table></div>';
+
+      } else {
+        listHtml += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+        filtered.forEach(function(arch) {
+          const lastContact = getLastContactDate(arch);
+          const daysInactive = daysSince(lastContact);
+          const isOverdue = daysInactive > 7;
+          const isUnassigned = !arch.consultant || arch.consultant === '';
+
+          listHtml += '<div class="bg-white p-5 rounded-xl border ' + (isUnassigned ? 'border-amber-400 bg-amber-50/20' : (isOverdue ? 'border-rose-400 bg-rose-50/20' : 'border-brand-border')) + ' shadow-sm space-y-3 flex flex-col justify-between">' +
+            '<div>' +
+            '<div class="flex justify-between items-center mb-2">' +
+            '<div class="flex items-center gap-1.5 flex-1 mr-2">' +
+            '<select id="select-status-' + arch.id + '" onchange="updateArchStatusDirect(\'' + arch.id + '\')" class="p-1.5 bg-brand/10 border border-brand/20 rounded text-xs font-bold text-brand uppercase cursor-pointer outline-none">' +
+            '<option value="Novo" ' + (arch.status === 'Novo' ? 'selected' : '') + '>Novo</option>' +
+            '<option value="Em Contato" ' + (arch.status === 'Em Contato' ? 'selected' : '') + '>Em Contato</option>' +
+            '<option value="Reunião marcada" ' + (arch.status === 'Reunião marcada' ? 'selected' : '') + '>Reunião marcada</option>' +
+            '<option value="Proposta Enviada" ' + (arch.status === 'Proposta Enviada' ? 'selected' : '') + '>Proposta Enviada</option>' +
+            '<option value="Parceria Fechada" ' + (arch.status === 'Parceria Fechada' ? 'selected' : '') + '>Parceria Fechada</option>' +
+            '<option value="Sem Interesse" ' + (arch.status === 'Sem Interesse' ? 'selected' : '') + '>Sem Interesse</option>' +
+            '</select>' +
+            '</div>' +
+            '<div class="flex items-center gap-1.5">' +
+            (isUnassigned ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">⚠️ Na Fila</span>' : (isOverdue ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-700">⚠️ > 7 dias</span>' : '')) +
+            (isElevated ? '<button onclick="deleteArchitect(\'' + arch.id + '\')" class="text-gray-400 hover:text-rose-600 p-1" title="Excluir Arquiteto"><i class="fa-solid fa-trash-can"></i></button>' : '') +
+            '</div></div>' +
+            '<h3 class="font-bold text-base text-brand mt-1 cursor-pointer hover:underline" onclick="state.selectedArchHistory=\'' + arch.id + '\'; render();">' + arch.name + '</h3>' +
+            '<p class="text-xs text-brand-muted font-medium">' + (arch.company || 'Escritório Particular') + '</p>' +
+            '<p class="text-xs text-gray-500"><i class="fa-solid fa-location-dot mr-1"></i>' + arch.city + '</p>' +
+            '<div class="mt-3 pt-3 border-t border-brand-border/60 text-xs space-y-2">' +
+            (arch.phone ? '<p><i class="fa-solid fa-phone mr-1 text-brand-muted"></i> ' + arch.phone + '</p>' : '') +
+            (arch.email ? '<p class="break-all"><i class="fa-solid fa-envelope mr-1 text-brand-muted"></i> ' + arch.email + '</p>' : '') +
+            '<div class="pt-1"><label class="block text-[10px] text-brand-muted uppercase font-bold mb-0.5">Consultor Responsável:</label>';
+          
+          if (isElevated) {
+            listHtml += '<div class="flex gap-1.5">' +
+              '<select id="select-consultant-' + arch.id + '" class="flex-1 p-1.5 ' + (isUnassigned ? 'bg-amber-100 border-amber-300' : 'bg-brand-bg border-brand-border') + ' rounded text-xs font-semibold text-brand">' +
+              '<option value="" ' + (isUnassigned ? 'selected' : '') + '>-- Sem Consultor (Fila) --</option>';
+            state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+              listHtml += '<option value="' + u.name + '" ' + (arch.consultant === u.name ? 'selected' : '') + '>' + u.name + '</option>';
+            });
+            listHtml += '</select>' +
+              '<button onclick="saveConsultantAssignment(\'' + arch.id + '\')" class="px-3 py-1.5 bg-brand text-white rounded text-xs font-semibold hover:bg-brand-light transition shadow"><i class="fa-solid fa-floppy-disk"></i> Salvar</button>' +
+              '</div>';
+          } else {
+            listHtml += '<p class="text-brand font-semibold">' + (arch.consultant || 'Não Atribuído') + '</p>';
+          }
+
+          listHtml += '</div><p class="text-[11px] text-gray-400 pt-1"><i class="fa-regular fa-clock mr-1"></i> Cadastrado em: ' + arch.entryDate + '</p>' +
+            '</div></div>' +
+            '<div class="pt-3 border-t border-brand-border flex gap-2">' +
+            '<button onclick="state.selectedArchForFeedback=\'' + arch.id + '\'; render();" class="flex-1 py-1.5 bg-brand text-white text-xs font-semibold rounded hover:bg-brand-light transition">+ Feedback</button>' +
+            '<button onclick="state.selectedArchHistory=\'' + arch.id + '\'; render();" class="px-3 py-1.5 bg-brand-bg text-brand border border-brand-border text-xs font-semibold rounded hover:bg-white transition" title="Ver Histórico"><i class="fa-solid fa-history"></i></button>' +
+            (arch.phone ? '<a href="https://wa.me/55' + arch.phone.replace(/\D/g, '') + '" target="_blank" class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 transition flex items-center justify-center" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>' : '') +
+            '</div></div>';
+        });
+        listHtml += '</div>';
+      }
+      return listHtml + '</div>';
+    }
+
+    function renderAuditDashboard() {
+      const selectedCons = window.auditConsultantFilter || 'all';
+      let targetArchs = state.architects;
+      if (selectedCons !== 'all') {
+        targetArchs = state.architects.filter(function(a) { return a.consultant === selectedCons; });
+      }
+
+      const totalArchs = targetArchs.length;
+      const totalContacts = targetArchs.reduce(function(acc, curr) { return acc + (curr.history ? curr.history.length : 0); }, 0);
+      
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const contactsLast7Days = targetArchs.reduce(function(acc, curr) {
+        if (!curr.history) return acc;
+        return acc + curr.history.filter(function(h) { return new Date(h.date) >= sevenDaysAgo; }).length;
+      }, 0);
+
+      const unassigned = targetArchs.filter(function(a) { return !a.consultant || a.consultant === ''; }).length;
+      const inactiveMoreThan7Days = targetArchs.filter(function(a) { return daysSince(getLastContactDate(a)) > 7; }).length;
+      const meetingsMarked = targetArchs.filter(function(a) { return a.status === 'Reunião marcada'; }).length;
+      const closedPartnerships = targetArchs.filter(function(a) { return a.status === 'Parceria Fechada'; }).length;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const followUpsToday = targetArchs.filter(function(a) { return a.nextFollowUp === todayStr; }).length;
+      const followUpsOverdue = targetArchs.filter(function(a) { return a.nextFollowUp && a.nextFollowUp < todayStr && a.status !== 'Parceria Fechada' && a.status !== 'Sem Interesse'; }).length;
+
+      const allScheduledFollowUps = state.architects.filter(function(a) { return a.nextFollowUp && a.status !== 'Parceria Fechada' && a.status !== 'Sem Interesse'; }).sort(function(a, b) { return a.nextFollowUp.localeCompare(b.nextFollowUp); });
+
+      const followUpsByConsultant = {};
+      const consultantsList = state.users.filter(function(u) { return u.role === 'consultant'; });
+      
+      consultantsList.forEach(function(c) {
+        followUpsByConsultant[c.name] = [];
+      });
+      followUpsByConsultant['Sem Consultor'] = [];
+
+      allScheduledFollowUps.forEach(function(a) {
+        const cons = (a.consultant && a.consultant !== '') ? a.consultant : 'Sem Consultor';
+        if (!followUpsByConsultant[cons]) followUpsByConsultant[cons] = [];
+        followUpsByConsultant[cons].push(a);
+      });
+
+      let followUpCardsHtml = '';
+      Object.keys(followUpsByConsultant).forEach(function(consName) {
+        const archsList = followUpsByConsultant[consName];
+        if (archsList.length === 0) return;
+
+        let archRows = '';
+        archsList.forEach(function(a) {
+          const isLate = a.nextFollowUp < todayStr;
+          const isToday = a.nextFollowUp === todayStr;
+          archRows += '<tr class="hover:bg-brand-bg/50">' +
+            '<td class="p-2.5 font-bold text-brand">' + a.name + '<span class="block text-[10px] text-brand-muted">' + (a.company || 'Escritório Particular') + '</span></td>' +
+            '<td class="p-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-brand/15 text-brand">' + a.status + '</span></td>' +
+            '<td class="p-2.5"><span class="px-2 py-0.5 rounded text-xs font-bold ' + (isLate ? 'bg-rose-100 text-rose-700' : (isToday ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')) + '">' + a.nextFollowUp + (isLate ? ' (Atrasado)' : (isToday ? ' (Hoje)' : '')) + '</span></td>' +
+            '<td class="p-2.5">' + (a.phone || '-') + '</td></tr>';
+        });
+
+        followUpCardsHtml += '<div class="bg-brand-bg border border-brand-border rounded-xl p-4 space-y-3 shadow-sm">' +
+          '<div class="flex justify-between items-center border-b border-brand-border pb-2">' +
+          '<h4 class="font-bold text-brand text-sm flex items-center gap-2"><i class="fa-solid fa-user-tie text-emerald-700"></i> ' + consName + '</h4>' +
+          '<span class="text-[10px] bg-brand text-white px-2.5 py-0.5 rounded-full font-bold">' + archsList.length + ' agendados</span>' +
+          '</div>' +
+          '<div class="overflow-x-auto"><table class="w-full text-left border-collapse text-xs">' +
+          '<thead><tr class="text-brand-muted uppercase text-[9px] border-b border-brand-border"><th class="p-2">Arquiteto(a)</th><th class="p-2">Status</th><th class="p-2">Data do Follow-up</th><th class="p-2">Telefone</th></tr></thead>' +
+          '<tbody class="divide-y divide-brand-border/60">' + archRows + '</tbody>' +
+          '</table></div></div>';
+      });
+
+      if (!followUpCardsHtml) {
+        followUpCardsHtml = '<div class="col-span-full p-6 text-center text-gray-400 italic">Nenhum follow-up agendado no momento.</div>';
+      }
+
+      let html = '<div class="space-y-6">' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">' +
+        '<div><h2 class="text-xl font-bold text-brand mb-1">Painel de Auditoria e Desempenho</h2><p class="text-xs text-brand-muted">Métricas e gráficos analíticos atualizados em tempo real.</p></div>' +
+        '<div><label class="block text-[10px] text-brand-muted uppercase font-bold mb-1">Filtrar por Consultor:</label>' +
+        '<select onchange="window.auditConsultantFilter=this.value; render();" class="p-2 bg-brand-bg border border-brand-border rounded text-xs font-semibold">' +
+        '<option value="all" ' + (selectedCons === 'all' ? 'selected' : '') + '>Todos os Consultores (Geral)</option>';
+      
+      state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+        html += '<option value="' + u.name + '" ' + (selectedCons === u.name ? 'selected' : '') + '>' + u.name + '</option>';
+      });
+
+      html += '</select></div></div>' +
+
+      '<div class="bg-white rounded-xl border border-brand-border shadow-sm overflow-x-auto">' +
+        '<table class="w-full text-center border-collapse"><thead>' +
+        '<tr class="bg-brand text-white text-[11px] uppercase font-bold tracking-wider">' +
+        '<th class="p-3 border-r border-white/10">Arquitetos Cadastrados</th>' +
+        '<th class="p-3 border-r border-white/10">Contatos Realizados</th>' +
+        '<th class="p-3 border-r border-white/10">Contatos Últimos 7 Dias</th>' +
+        '<th class="p-3 border-r border-white/10">Sem Nenhum Contato</th>' +
+        '<th class="p-3 border-r border-white/10">Parados > 7 Dias</th>' +
+        '<th class="p-3 border-r border-white/10">Reuniões Marcadas</th>' +
+        '<th class="p-3 border-r border-white/10">Fechados</th>' +
+        '<th class="p-3 border-r border-white/10">Alertas Críticos</th>' +
+        '<th class="p-3 border-r border-white/10">Follow-ups Atrasados</th>' +
+        '<th class="p-3">Follow-ups Hoje</th>' +
+        '</tr></thead><tbody>' +
+        '<tr class="text-lg font-bold text-brand bg-brand-bg">' +
+        '<td class="p-4 border-r border-brand-border">' + totalArchs + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-emerald-700">' + totalContacts + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-blue-700">' + contactsLast7Days + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-amber-600">' + targetArchs.filter(function(a) { return !a.history || a.history.length === 0; }).length + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-rose-600">' + inactiveMoreThan7Days + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-purple-700">' + meetingsMarked + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-emerald-800">' + closedPartnerships + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-rose-700">' + unassigned + '</td>' +
+        '<td class="p-4 border-r border-brand-border text-rose-600">' + followUpsOverdue + '</td>' +
+        '<td class="p-4 text-amber-700">' + followUpsToday + '</td>' +
+        '</tr></tbody></table></div>' +
+
+      '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm space-y-4">' +
+        '<div class="flex items-center justify-between border-b pb-3">' +
+        '<h3 class="font-bold text-brand text-base"><i class="fa-solid fa-list-check text-emerald-700 mr-2"></i>Controle de Follow-ups Agendados por Consultor</h3>' +
+        '<span class="text-xs bg-brand/10 text-brand font-semibold px-2.5 py-1 rounded-lg">Visão Gerencial Organizada</span>' +
+        '</div>' +
+        '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' + followUpCardsHtml + '</div>' +
+        '</div>' +
+
+      '<div class="grid grid-cols-1 md:grid-cols-2 gap-6">' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex flex-col items-center">' +
+          '<h3 class="font-bold text-brand text-sm mb-4 uppercase tracking-wide">Distribuição por Status dos Arquitetos</h3>' +
+          '<div class="w-full max-w-xs h-64 flex items-center justify-center">' +
+            '<canvas id="statusChart"></canvas>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex flex-col items-center">' +
+          '<h3 class="font-bold text-brand text-sm mb-4 uppercase tracking-wide">Desempenho por Consultor (Total de Arquitetos)</h3>' +
+          '<div class="w-full h-64 flex items-center justify-center">' +
+            '<canvas id="consultantChart"></canvas>' +
+          '</div>' +
+        '</div>' +
+      '</div></div>';
+
+      return html;
+    }
+
+    function initAuditCharts() {
+      const selectedCons = window.auditConsultantFilter || 'all';
+      let targetArchs = state.architects;
+      if (selectedCons !== 'all') {
+        targetArchs = state.architects.filter(function(a) { return a.consultant === selectedCons; });
+      }
+
+      const statusCounts = {
+        'Novo': 0,
+        'Em Contato': 0,
+        'Reunião marcada': 0,
+        'Proposta Enviada': 0,
+        'Parceria Fechada': 0,
+        'Sem Interesse': 0
+      };
+
+      targetArchs.forEach(function(a) {
+        if (statusCounts[a.status] !== undefined) {
+          statusCounts[a.status]++;
+        } else {
+          statusCounts['Novo']++;
+        }
+      });
+
+      const statusCtx = document.getElementById('statusChart');
+      if (statusCtx) {
+        if (window.myStatusChart) window.myStatusChart.destroy();
+        window.myStatusChart = new Chart(statusCtx, {
+          type: 'doughnut',
+          data: {
+            labels: Object.keys(statusCounts),
+            datasets: [{
+              data: Object.values(statusCounts),
+              backgroundColor: ['#616F65', '#3A4A3F', '#8B5CF6', '#3B82F6', '#059669', '#EF4444'],
+              borderWidth: 2,
+              borderColor: '#FFFFFF'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+            }
+          }
+        });
+      }
+
+      const consultantNames = [];
+      const consultantCounts = [];
+      
+      state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+        consultantNames.push(u.name);
+        consultantCounts.push(state.architects.filter(function(a) { return a.consultant === u.name; }).length);
+      });
+
+      const consultantCtx = document.getElementById('consultantChart');
+      if (consultantCtx) {
+        if (window.myConsultantChart) window.myConsultantChart.destroy();
+        window.myConsultantChart = new Chart(consultantCtx, {
+          type: 'bar',
+          data: {
+            labels: consultantNames,
+            datasets: [{
+              label: 'Arquitetos Atribuídos',
+              data: consultantCounts,
+              backgroundColor: '#2D3A31',
+              borderRadius: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+          }
+        });
+      }
+    }
+
+    function renderEventsManagement() {
+      let html = '<div class="space-y-6">' +
+        '<div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex justify-between items-center">' +
+        '<div><h2 class="text-xl font-bold text-brand">Gestão de Eventos e Convidados</h2><p class="text-xs text-brand-muted">Cadastre eventos, gerencie convidados e exporte em PDF ou Excel.</p></div>' +
+        '<button onclick="state.showAddEventModal=true; render();" class="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded hover:bg-emerald-700 transition flex items-center gap-1 shadow"><i class="fa-solid fa-calendar-plus"></i> + Novo Evento</button>' +
+        '</div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+
+      if (state.events.length === 0) {
+        html += '<div class="col-span-full bg-white p-12 text-center rounded-xl border border-brand-border space-y-2"><i class="fa-solid fa-calendar-xmark text-3xl text-brand-muted"></i><p class="font-bold text-brand">Nenhum evento cadastrado ainda.</p></div>';
+      } else {
+        state.events.forEach(function(ev) {
+          const totalGuests = ev.guests ? ev.guests.length : 0;
+          const confirmedGuests = ev.guests ? ev.guests.filter(function(g) { return g.confirmed === 'Sim'; }).length : 0;
+          const attendedGuests = ev.guests ? ev.guests.filter(function(g) { return g.attended === 'Sim'; }).length : 0;
+
+          html += '<div class="bg-white p-5 rounded-xl border border-brand-border shadow-sm space-y-4 flex flex-col justify-between"><div>' +
+            '<div class="flex justify-between items-start"><span class="text-[10px] font-bold px-2 py-0.5 rounded bg-brand/10 text-brand"><i class="fa-regular fa-calendar mr-1"></i> ' + ev.date + '</span>' +
+            '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">' + confirmedGuests + ' Confirmados</span></div>' +
+            '<h3 class="font-bold text-base text-brand mt-2">' + ev.title + '</h3>' +
+            '<p class="text-xs text-brand-muted"><i class="fa-solid fa-location-dot mr-1"></i> ' + (ev.location || 'Local não especificado') + '</p>' +
+            '<div class="mt-4 pt-3 border-t border-brand-border text-xs grid grid-cols-3 gap-2 text-center">' +
+            '<div class="bg-brand-bg p-2 rounded"><span class="block font-bold text-sm text-brand">' + totalGuests + '</span><span class="text-[10px] text-brand-muted">Convidados</span></div>' +
+            '<div class="bg-brand-bg p-2 rounded"><span class="block font-bold text-sm text-emerald-700">' + confirmedGuests + '</span><span class="text-[10px] text-brand-muted">Confirmados</span></div>' +
+            '<div class="bg-brand-bg p-2 rounded"><span class="block font-bold text-sm text-purple-700">' + attendedGuests + '</span><span class="text-[10px] text-brand-muted">Compareceram</span></div>' +
+            '</div></div>' +
+            '<div class="pt-3 border-t border-brand-border flex gap-2">' +
+            '<button onclick="state.selectedEventForGuests=\'' + ev.id + '\'; render();" class="flex-1 py-2 bg-brand text-white text-xs font-semibold rounded hover:bg-brand-light transition">Gerenciar Convidados</button>' +
+            '<button onclick="exportEventPDF(\'' + ev.id + '\')" class="px-3 py-2 bg-rose-600 text-white text-xs font-semibold rounded hover:bg-rose-700 transition" title="Gerar PDF Profissional"><i class="fa-solid fa-file-pdf"></i></button>' +
+            '<button onclick="exportEventCSV(\'' + ev.id + '\')" class="px-3 py-2 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 transition" title="Baixar Excel/CSV"><i class="fa-solid fa-file-excel"></i></button>' +
+            '</div></div>';
+        });
+      }
+      return html + '</div></div>';
+    }
+
+    function renderAddEventModal() {
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-md w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4">' +
+        '<div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-lg text-brand">Cadastrar Novo Evento</h3><button onclick="state.showAddEventModal=false; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<form onsubmit="createNewEvent(event)" class="space-y-3">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Nome do Evento *</label><input type="text" id="ev-title" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none" placeholder="Ex: Café com Arquitetos"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Data do Evento *</label><input type="date" id="ev-date" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Local</label><input type="text" id="ev-location" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none" placeholder="Ex: Showroom"></div>' +
+        '<div class="flex gap-2 justify-end pt-3 border-t"><button type="button" onclick="state.showAddEventModal=false; render();" class="px-4 py-2 border rounded text-xs font-semibold">Cancelar</button><button type="submit" class="px-4 py-2 bg-brand text-white rounded text-xs font-semibold">Salvar Evento</button></div>' +
+        '</form></div></div>';
+    }
+
+    function renderEventGuestsModal() {
+      const ev = state.events.find(function(e) { return e.id === state.selectedEventForGuests; });
+      if (!ev) return '';
+
+      let guestsRows = '';
+      if (!ev.guests || ev.guests.length === 0) {
+        guestsRows = '<tr><td colspan="7" class="p-6 text-center text-gray-400 italic">Nenhum convidado adicionado a este evento ainda.</td></tr>';
+      } else {
+        ev.guests.forEach(function(g) {
+          guestsRows += '<tr class="hover:bg-brand-bg/50">' +
+            '<td class="p-3 font-bold text-brand">' + g.name + '</td>' +
+            '<td class="p-3 text-brand-muted">' + (g.company || '-') + '</td>' +
+            '<td class="p-3">' + g.contact + '</td>' +
+            '<td class="p-3 text-gray-500">' + g.addedBy + '</td>' +
+            '<td class="p-3 text-center"><select onchange="updateGuestStatus(\'' + ev.id + '\', \'' + g.id + '\', \'confirmed\', this.value)" class="p-1 rounded text-xs font-semibold ' + (g.confirmed === 'Sim' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-700') + '">' +
+            '<option value="Não" ' + (g.confirmed === 'Não' ? 'selected' : '') + '>Não</option>' +
+            '<option value="Sim" ' + (g.confirmed === 'Sim' ? 'selected' : '') + '>Sim</option>' +
+            '<option value="Talvez" ' + (g.confirmed === 'Talvez' ? 'selected' : '') + '>Talvez</option>' +
+            '</select></td>' +
+            '<td class="p-3 text-center"><select onchange="updateGuestStatus(\'' + ev.id + '\', \'' + g.id + '\', \'attended\', this.value)" class="p-1 rounded text-xs font-semibold ' + (g.attended === 'Sim' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700') + '">' +
+            '<option value="Não" ' + (g.attended === 'Não' ? 'selected' : '') + '>Não</option>' +
+            '<option value="Sim" ' + (g.attended === 'Sim' ? 'selected' : '') + '>Sim</option>' +
+            '</select></td>' +
+            '<td class="p-3 text-center"><button onclick="removeGuestFromEvent(\'' + ev.id + '\', \'' + g.id + '\')" class="p-1.5 bg-rose-100 text-rose-700 rounded hover:bg-rose-200 transition" title="Remover Convidado"><i class="fa-solid fa-trash-can"></i></button></td></tr>';
+        });
+      }
+
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-4xl w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4 max-h-[90vh] flex flex-col">' +
+        '<div class="flex justify-between items-center border-b pb-3"><div><h3 class="font-bold text-lg text-brand">Convidados: ' + ev.title + '</h3><p class="text-xs text-brand-muted">Data: ' + ev.date + '</p></div>' +
+        '<div class="flex gap-2">' +
+        '<button onclick="exportEventPDF(\'' + ev.id + '\')" class="px-3 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded hover:bg-rose-700 transition flex items-center gap-1"><i class="fa-solid fa-file-pdf"></i> Gerar PDF</button>' +
+        '<button onclick="exportEventCSV(\'' + ev.id + '\')" class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded hover:bg-emerald-700 transition flex items-center gap-1"><i class="fa-solid fa-file-excel"></i> Excel / CSV</button>' +
+        '<button onclick="state.selectedEventForGuests=null; render();" class="text-gray-400 hover:text-black text-xl ml-2">&times;</button>' +
+        '</div></div>' +
+        '<form onsubmit="addGuestToEvent(event, \'' + ev.id + '\')" class="bg-brand-bg p-4 rounded-xl border border-brand-border grid grid-cols-1 md:grid-cols-5 gap-2 items-end">' +
+        '<div><label class="block text-[10px] font-bold text-brand-muted uppercase mb-0.5">Nome *</label><input type="text" id="gst-name" required class="w-full p-2 bg-white border border-brand-border rounded text-xs" placeholder="Nome..."></div>' +
+        '<div><label class="block text-[10px] font-bold text-brand-muted uppercase mb-0.5">Empresa</label><input type="text" id="gst-company" class="w-full p-2 bg-white border border-brand-border rounded text-xs" placeholder="Empresa..."></div>' +
+        '<div><label class="block text-[10px] font-bold text-brand-muted uppercase mb-0.5">Contato *</label><input type="text" id="gst-contact" required class="w-full p-2 bg-white border border-brand-border rounded text-xs" placeholder="(21) ..."></div>' +
+        '<div><label class="block text-[10px] font-bold text-brand-muted uppercase mb-0.5">Confirmou?</label><select id="gst-confirmed" class="w-full p-2 bg-white border border-brand-border rounded text-xs font-semibold"><option value="Não">Não</option><option value="Sim">Sim</option><option value="Talvez">Talvez</option></select></div>' +
+        '<button type="submit" class="w-full py-2 bg-brand text-white text-xs font-semibold rounded hover:bg-brand-light transition">+ Adicionar</button>' +
+        '</form>' +
+        '<div class="flex-1 overflow-y-auto border border-brand-border rounded-xl">' +
+        '<table class="w-full text-left border-collapse text-xs">' +
+        '<thead><tr class="bg-brand text-white uppercase text-[10px]"><th class="p-3">Convidado</th><th class="p-3">Empresa</th><th class="p-3">Contato</th><th class="p-3">Adicionado Por</th><th class="p-3 text-center">Confirmado?</th><th class="p-3 text-center">Compareceu?</th><th class="p-3 text-center">Ações</th></tr></thead>' +
+        '<tbody class="divide-y divide-brand-border">' + guestsRows + '</tbody>' +
+        '</table></div></div></div>';
+    }
+
+    function renderUsersManagement() {
+      let html = '<div class="space-y-6"><div class="bg-white p-6 rounded-xl border border-brand-border shadow-sm flex justify-between items-center">' +
+        '<div><h2 class="text-xl font-bold text-brand">Gestão de Usuários e Consultores</h2><p class="text-xs text-brand-muted">Cadastre novos consultores ou edite credenciais.</p></div>' +
+        '<button onclick="state.showAddUserModal=true; render();" class="px-4 py-2 bg-brand text-white font-semibold text-xs rounded hover:bg-brand-light transition flex items-center gap-1 shadow"><i class="fa-solid fa-user-plus"></i> + Novo Usuário</button>' +
+        '</div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+
+      state.users.forEach(function(u) {
+        const assignedCount = state.architects.filter(function(a) { return a.consultant === u.name; }).length;
+        html += '<div class="p-5 bg-white rounded-xl border border-brand-border shadow-sm flex flex-col justify-between space-y-4">' +
+          '<div class="flex justify-between items-start"><div>' +
+          '<p class="font-bold text-base text-brand">' + u.name + '</p>' +
+          '<p class="text-xs text-brand-muted">Login: <span class="font-mono text-brand font-semibold">' + u.username + '</span></p>' +
+          '<span class="inline-block mt-2 text-[10px] font-bold uppercase px-2 py-0.5 rounded ' + (u.role === 'admin' ? 'bg-purple-100 text-purple-700' : (u.role === 'supervisor' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')) + '">' + (u.role === 'admin' ? 'Administrador' : (u.role === 'supervisor' ? 'Supervisora' : 'Consultor')) + '</span>' +
+          '</div>' + (u.role === 'consultant' ? '<div class="text-right bg-brand-bg p-2 rounded-lg border border-brand-border"><span class="text-xl font-bold text-brand">' + assignedCount + '</span><p class="text-[10px] text-brand-muted">arquitetos</p></div>' : '') +
+          '</div><div class="pt-3 border-t border-brand-border flex justify-between items-center">' +
+          '<span class="text-xs text-gray-400">Senha: <span class="font-mono text-gray-600">' + u.pass + '</span></span>' +
+          '<button onclick="state.editingUser=\'' + u.username + '\'; render();" class="px-3 py-1 bg-brand-bg text-brand border border-brand-border text-xs font-semibold rounded hover:bg-white transition"><i class="fa-solid fa-pen-to-square mr-1"></i> Editar</button>' +
+          '</div></div>';
+      });
+      return html + '</div></div>';
+    }
+
+    function renderAddUserModal() {
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-md w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4">' +
+        '<div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-lg text-brand">Cadastrar Novo Usuário</h3><button onclick="state.showAddUserModal=false; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<form onsubmit="createNewUser(event)" class="space-y-3">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Nome Completo *</label><input type="text" id="new-u-name" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Usuário (Login) *</label><input type="text" id="new-u-username" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Senha *</label><input type="text" id="new-u-pass" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Cargo</label><select id="new-u-role" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium"><option value="consultant">Consultor</option><option value="supervisor">Supervisor(a)</option><option value="admin">Administrador</option></select></div>' +
+        '<div class="flex gap-2 justify-end pt-3 border-t"><button type="button" onclick="state.showAddUserModal=false; render();" class="px-4 py-2 border rounded text-xs font-semibold">Cancelar</button><button type="submit" class="px-4 py-2 bg-brand text-white rounded text-xs font-semibold">Salvar</button></div>' +
+        '</form></div></div>';
+    }
+
+    function renderEditUserModal() {
+      const user = state.users.find(function(u) { return u.username === state.editingUser; });
+      if (!user) return '';
+
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-md w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4">' +
+        '<div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-lg text-brand">Editar Usuário</h3><button onclick="state.editingUser=null; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<form onsubmit="saveEditedUser(event, \'' + user.username + '\')" class="space-y-3">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Nome Completo *</label><input type="text" id="edit-u-name" value="' + user.name + '" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Usuário *</label><input type="text" id="edit-u-username" value="' + user.username + '" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Senha *</label><input type="text" id="edit-u-pass" value="' + user.pass + '" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Cargo</label><select id="edit-u-role" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium"><option value="consultant" ' + (user.role === 'consultant' ? 'selected' : '') + '>Consultor</option><option value="supervisor" ' + (user.role === 'supervisor' ? 'selected' : '') + '>Supervisor(a)</option><option value="admin" ' + (user.role === 'admin' ? 'selected' : '') + '>Administrador</option></select></div>' +
+        '<div class="flex gap-2 justify-end pt-3 border-t"><button type="button" onclick="state.editingUser=null; render();" class="px-4 py-2 border rounded text-xs font-semibold">Cancelar</button><button type="submit" class="px-4 py-2 bg-brand text-white rounded text-xs font-semibold">Salvar</button></div>' +
+        '</form></div></div>';
+    }
+
+    function renderAddArchModal() {
+      const isElevated = state.currentUser.role === 'admin' || state.currentUser.role === 'supervisor';
+      let optionsHtml = '<option value="">-- Sem Consultor (Fila) --</option>';
+      if (isElevated) {
+        state.users.filter(function(u) { return u.role === 'consultant'; }).forEach(function(u) {
+          optionsHtml += '<option value="' + u.name + '">' + u.name + '</option>';
+        });
+      }
+
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-lg w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4">' +
+        '<div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-lg text-brand">Cadastrar Novo Arquiteto</h3><button onclick="state.showAddArchModal=false; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<form onsubmit="createNewArchitect(event)" class="space-y-3">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Nome Completo *</label><input type="text" id="new-arch-name" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Escritório / Empresa</label><input type="text" id="new-arch-company" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Telefone *</label><input type="text" id="new-arch-phone" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Cidade/UF</label><input type="text" id="new-arch-city" value="Rio de Janeiro/RJ" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">E-mail</label><input type="email" id="new-arch-email" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></div>' +
+        (isElevated ? '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Consultor</label><select id="new-arch-consultant" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium">' + optionsHtml + '</select></div>' : '<p class="text-xs text-brand-muted">Consultor responsável: <strong class="text-brand">' + state.currentUser.name + '</strong></p>') +
+        '<div class="flex gap-2 justify-end pt-3 border-t"><button type="button" onclick="state.showAddArchModal=false; render();" class="px-4 py-2 border rounded text-xs font-semibold">Cancelar</button><button type="submit" class="px-4 py-2 bg-brand text-white rounded text-xs font-semibold">Salvar</button></div>' +
+        '</form></div></div>';
+    }
+
+    function renderFeedbackModal() {
+      const arch = state.architects.find(function(a) { return a.id === state.selectedArchForFeedback; });
+      if (!arch) return '';
+
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-lg w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4">' +
+        '<div class="flex justify-between items-center border-b pb-3"><h3 class="font-bold text-lg text-brand">Registrar Contato / Feedback</h3><button onclick="state.selectedArchForFeedback=null; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<p class="text-xs text-brand-muted">Arquiteto(a): <strong class="text-brand">' + arch.name + '</strong></p>' +
+        '<form onsubmit="addFeedback(event, \'' + arch.id + '\')" class="space-y-4">' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Status</label><select id="fb-status" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium"><option value="Em Contato">Em Contato</option><option value="Reunião marcada">Reunião marcada</option><option value="Proposta Enviada">Proposta Enviada</option><option value="Parceria Fechada">Parceria Fechada</option><option value="Sem Interesse">Sem Interesse</option></select></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Canal de Contato</label><select id="fb-channel" onchange="document.getElementById(\'other-channel-box\').style.display = this.value === \'Outro\' ? \'block\':\'none\';" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm font-medium"><option value="WhatsApp">WhatsApp</option><option value="Instagram">Instagram</option><option value="Ligação">Ligação</option><option value="E-mail">E-mail</option><option value="Outro">Outro</option></select></div>' +
+        '<div id="other-channel-box" style="display: none;"><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Especifique *</label><input type="text" id="fb-other-channel" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Próximo Follow-up</label><input type="date" id="fb-followup" required class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm"></div>' +
+        '<div><label class="block text-xs font-semibold text-brand-muted uppercase mb-1">Observações</label><textarea id="fb-notes" required rows="4" class="w-full p-2 bg-brand-bg border border-brand-border rounded text-sm outline-none"></textarea></div>' +
+        '<div class="flex gap-2 justify-end pt-2"><button type="button" onclick="state.selectedArchForFeedback=null; render();" class="px-4 py-2 border rounded text-xs font-semibold">Cancelar</button><button type="submit" class="px-4 py-2 bg-brand text-white rounded text-xs font-semibold">Salvar</button></div>' +
+        '</form></div></div>';
+    }
+
+    function renderHistoryModal() {
+      const arch = state.architects.find(function(a) { return a.id === state.selectedArchHistory; });
+      if (!arch) return '';
+
+      let historyList = '';
+      if (!arch.history || arch.history.length === 0) {
+        historyList = '<p class="text-xs text-gray-400 italic">Nenhuma interação registrada ainda.</p>';
+      } else {
+        arch.history.forEach(function(h) {
+          historyList += '<div class="p-3 bg-brand-bg rounded-lg border border-brand-border space-y-1">' +
+            '<div class="flex justify-between text-xs font-bold text-brand"><span>' + h.user + (h.channel ? ' • <span class="text-emerald-700">' + h.channel + '</span>' : '') + '</span><span class="text-gray-400 font-normal">' + h.date + '</span></div>' +
+            '<p class="text-xs text-brand font-semibold uppercase">Status: ' + h.status + ' | <span class="text-emerald-700">Follow-up agendado: ' + (h.followUpDate || 'Não agendado') + '</span></p>' +
+            '<p class="text-xs text-brand-text whitespace-pre-wrap">' + h.notes + '</p></div>';
+        });
+      }
+
+      return '<div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">' +
+        '<div class="bg-white max-w-xl w-full rounded-2xl shadow-2xl border border-brand-border p-6 space-y-4 max-h-[90vh] flex flex-col">' +
+        '<div class="flex justify-between items-center border-b pb-3"><div><h3 class="font-bold text-lg text-brand">' + arch.name + '</h3><p class="text-xs text-brand-muted">' + (arch.company || 'Escritório Particular') + '</p></div><button onclick="state.selectedArchHistory=null; render();" class="text-gray-400 hover:text-black">&times;</button></div>' +
+        '<div class="flex-1 overflow-y-auto space-y-3"><h4 class="font-bold text-xs text-brand uppercase">Histórico de Interações</h4>' + historyList + '</div></div></div>';
+    }
+
+    window.onload = function() {
+      initSupabase();
+      render();
+    };
+  </script>
+</body>
+</html>
